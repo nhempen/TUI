@@ -1,0 +1,109 @@
+#!/bin/bash 
+# Move into TUIS Current Directory
+reset
+cd "$(dirname "$BASH_SOURCE")"
+HOUSE="`pwd`"
+#Sub Menu Directory
+SMDIR=$HOUSE/MenuOptions
+#Ignore exit and stop signals
+#trap '' INT TSTP
+#Menu Demensions
+HEIGHT=15
+WIDTH=60
+#Error MSG Demensions
+EHEIGHT=10
+EWIDTH=75
+#Globals
+MAINTOOLS="$HOUSE/tools"
+RETURN_MAINMENU="Return to Main Menu"
+ERROR_TITLE="THERE WAS AN ERROR"
+FATAL_ERROR_TITLE="THERE WAS A FATAL ERROR"
+CONFIG_FILE="TUI-Config.sh"
+#
+#
+#Error functions
+function fatalerror()
+{
+ #Fatal errors syntax: fatalerror "Message to display to user"
+ #Fatal error exits after displaying message
+ ERROR_MSG="$1"
+ dialog --title "$ERROR_TITLE" \
+ --msgbox "$ERROR_MSG \nThe script will exit." \
+ $EHEIGHT $EWIDTH && exit
+} #END Fatalerror
+function errormsg()
+{
+ #Regular errors syntax: errormsg "Message to display to user" "function"
+ #Regular errors return to the function designated by the second argument
+ ERROR_MSG="$1"
+ RETURNTO="$2"
+ dialog --title "$ERROR_TITLE" \
+ --msgbox "$ERROR_MSG" \
+ $EHEIGHT $EWIDTH && $RETURNTO
+} #END errormsg
+#
+#Collect Sub Menu Names in an array
+#Names are set using the filenames in the MenuOptions Directory
+#File names for sub directorys need to follow format SM-File-Name.sh
+#Create array of Menu Item filenames
+function get_submenufiles ()
+{
+ echo "Get Files"
+ SMITMSA=()
+ SMITMS=()
+ SMDIRS="`ls \"$SMDIR\" | grep "SM-\?"`"
+ for SMFOLDER in $SMDIRS; do
+  CHECKFOLDERDUPS="`echo \"$SMDIRS\" | grep -o \"$SMFOLDER\" |wc -l`"
+  [[ $CHECKFOLDERDUPS -gt 1 ]] && fatalerror "There are two $SMFOLDER folders, please correct this and re-run the script."  
+  SMFILE="SM"
+  CHECKFILEDUPS="`ls \"$SMDIR/$SMFOLDER\" | grep -o "$SMFILE" |wc -l`"
+  [[ $CHECKFILEDUPS -gt 1 ]] && fatalerror "There are two $SMFILE files, please correct this and re-run the script." 
+  SMFILE="`ls \"$SMDIR/$SMFOLDER\" | grep "$SMFILE"`" 
+  SMITMSA+=("$SMDIR/$SMFOLDER/$SMFILE")
+  #SMITMSA+=($SMDIR/$SMFOLDER/)
+  echo ${SMITMSA[@]}
+  SMITMS+=($SMFILE)
+  echo ${SMFILE[@]}
+ done
+} #End Getsubmenu
+
+#Create Array of Menu Item Titles
+function get_submenutitles()
+{
+ I=0
+ MMENUITMTAG=()
+ MMENUITMS=()
+ for NAME in ${SMITMS[@]}
+  do
+  NAME="`echo $NAME |tr '-' ' '|sed -e 's/\.sh//' |cut -d " " -f2-`"
+  MMENUITMS+=("$I" "$NAME")
+  let I=$I+1
+ done
+ ITMS=$(((${#MMENUITMS[@]} / 2) + 1))
+} #END get_submenutitles
+
+####The Main Menu
+function mainmenu ()
+{
+ OPTION=$(dialog --title "MAIN MENU" \
+                --no-tags --cancel-label "Exit"  \
+                --menu "TUI Menu \nplease select:" $HEIGHT $WIDTH $(($ITMS + 1)) \
+                "${MMENUITMS[@]}" \
+                "$ITMS" "TUI Configuration" 3>&1 1>&2 2>&3) 
+ [ "$?" -eq "1" ] && exit
+ if [[ $OPTION -eq $ITMS ]]; then
+   source "${SMDIR}/${CONFIG_FILE}" || errormsg "Could not load source file\n\" ${SMITMSA[$OPTION]} \"\nFor Menu Option$OPTION." "main" 
+  else 
+   SMHOME="$(dirname "${SMITMSA[$OPTION]}")"
+   cd "$SMHOME"
+   source "${SMITMSA[$OPTION]}" || errormsg "Could not load source file\n\"${SMITMSA[$OPTION]}\"\nFor Menu Option$OPTION." "main"
+ fi
+} #END mainmenu
+
+##MAIN##
+main(){
+ get_submenufiles
+ get_submenutitles
+ mainmenu
+}
+main
